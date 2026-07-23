@@ -44,6 +44,7 @@ export async function listCustomers(opts?: {
         c.license_number,
         c.classification,
         c.business_type,
+        c.employee_count != null ? String(c.employee_count) : "",
       ]
         .filter(Boolean)
         .join(" ")
