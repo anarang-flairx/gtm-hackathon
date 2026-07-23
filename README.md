@@ -10,13 +10,22 @@ Next.js + Supabase-ready workspace for CSLB contractor outbound GTM.
 - **Apollo enrichment** — simulated for the hackathon demo (deterministic emails, titles, domains, LinkedIn). Swap in a real Apollo API key later.
 - **Send + log** — every action writes an outreach event. Resend / Twilio send when configured; otherwise demo mode logs the activity.
 
-### ICPs seeded from `CSLB Contractor List.xlsx`
+### ICPs seeded (very small / Sole Owner only)
 
-| ICP | Source sheet |
+| ICP | Filter |
 | --- | --- |
-| B-2 Residential Remodeling | `B-2 Residential Remodeling` |
-| C-6 Cabinet and Millwork | `C-6 Cabinet and Millwork` |
-| NorCal | `Apollo for NorCal` |
+| Micro Sole Owner Remodelers | Sole Owner + B-2 sheet |
+| Micro Sole Owner Millwork | Sole Owner + C-6 sheet |
+| Micro Sole Owner NorCal | Sole Owner in NorCal counties / Apollo NorCal list |
+
+### Market funnel (Tools tab)
+
+Messages sent → people messaged → opened → clicked → responded → meeting → relationship → project requested → quoted → closed — shown overall and **by ICP**.
+
+### Disaster map (`/map`)
+
+Live US hazard radar from **USGS** earthquakes + **NWS** alerts (flood / fire / tsunami / storm). Epicenter rings scale with severity; hover shows location + event type.
+
 
 ## Quick start
 

@@ -7,6 +7,7 @@ const TABS = [
   { href: "/", label: "Customers" },
   { href: "/tools", label: "Tools by ICP" },
   { href: "/stats", label: "Tools" },
+  { href: "/map", label: "Disaster map" },
 ];
 
 export function AppNav() {
@@ -26,7 +27,7 @@ export function AppNav() {
             Prospect Desk
           </h1>
           <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">
-            CSLB contractors enriched via Apollo · email, call, and text from one workspace
+            Micro sole-owner contractors enriched via Apollo · outbound + disaster focus
           </p>
         </div>
         <nav className="flex gap-1 rounded-xl border border-[var(--line)] bg-white/70 p-1 shadow-[var(--shadow)]">

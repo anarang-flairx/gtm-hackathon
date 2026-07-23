@@ -1,10 +1,70 @@
 export type Channel = "email" | "phone" | "sms";
 export type Provider = "resend" | "twilio" | "demo" | "tel";
 
+export const FUNNEL_STAGES = [
+  {
+    id: "message_sent",
+    label: "First message sent",
+    short: "Sent",
+    description: "Outbound first touch landed",
+  },
+  {
+    id: "opened",
+    label: "Opened / read",
+    short: "Opened",
+    description: "Message opened and read",
+  },
+  {
+    id: "clicked",
+    label: "Clicked to website",
+    short: "Clicked",
+    description: "Prospect clicked through",
+  },
+  {
+    id: "responded",
+    label: "Responded back",
+    short: "Replied",
+    description: "Prospect replied to us",
+  },
+  {
+    id: "meeting_scheduled",
+    label: "Meeting scheduled",
+    short: "Meeting",
+    description: "Call or meeting booked",
+  },
+  {
+    id: "relationship",
+    label: "Relationship established",
+    short: "Relationship",
+    description: "Ongoing working relationship",
+  },
+  {
+    id: "project_requested",
+    label: "Projects requested",
+    short: "Requested",
+    description: "Project ask received",
+  },
+  {
+    id: "project_quoted",
+    label: "Project quoted",
+    short: "Quoted",
+    description: "Quote delivered",
+  },
+  {
+    id: "project_closed",
+    label: "Project closed",
+    short: "Closed",
+    description: "Won / closed project",
+  },
+] as const;
+
+export type FunnelStageId = (typeof FUNNEL_STAGES)[number]["id"];
+
 export type Icp = {
   id: string;
   slug: string;
   name: string;
+  description?: string;
 };
 
 export type Customer = {
@@ -29,6 +89,8 @@ export type Customer = {
   enriched_at: string | null;
   enrichment_source: string | null;
   icp_slugs: string[];
+  /** Furthest market-funnel stage reached */
+  funnel_stage: FunnelStageId | null;
 };
 
 export type OutreachEvent = {
@@ -53,6 +115,29 @@ export type EmailTracking = {
   clicked_at: string | null;
   click_count: number;
   created_at: string;
+};
+
+export type DisasterEventType =
+  | "earthquake"
+  | "flood"
+  | "fire"
+  | "tsunami"
+  | "storm"
+  | "other";
+
+export type DisasterEvent = {
+  id: string;
+  type: DisasterEventType;
+  title: string;
+  location: string;
+  lat: number;
+  lng: number;
+  severity: number; // 0-10 scale for marker size
+  magnitude?: number;
+  source: string;
+  url?: string;
+  occurred_at: string;
+  summary?: string;
 };
 
 export type LocalDb = {
