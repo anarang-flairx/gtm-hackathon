@@ -16,15 +16,19 @@ export function FiltersBar({
   const [pending, startTransition] = useTransition();
   const icp = params.get("icp") || "";
   const q = params.get("q") || "";
+  const sort = params.get("sort") || "score";
 
-  function update(next: { icp?: string; q?: string }) {
+  function update(next: { icp?: string; q?: string; sort?: string }) {
     const sp = new URLSearchParams(params.toString());
     const nextIcp = next.icp !== undefined ? next.icp : icp;
     const nextQ = next.q !== undefined ? next.q : q;
+    const nextSort = next.sort !== undefined ? next.sort : sort;
     if (nextIcp) sp.set("icp", nextIcp);
     else sp.delete("icp");
     if (nextQ) sp.set("q", nextQ);
     else sp.delete("q");
+    if (nextSort && nextSort !== "score") sp.set("sort", nextSort);
+    else sp.delete("sort");
     startTransition(() => {
       router.push(`/?${sp.toString()}`);
     });
@@ -36,9 +40,9 @@ export function FiltersBar({
         <button
           type="button"
           onClick={() => update({ icp: "" })}
-          className={`rounded-full border px-3 py-1.5 text-sm ${
+          className={`rounded-full border px-3 py-1.5 text-sm font-medium ${
             !icp
-              ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+              ? "chip-active"
               : "border-[var(--line)] bg-white/70 text-[var(--muted)]"
           }`}
         >
@@ -49,9 +53,9 @@ export function FiltersBar({
             key={item.id}
             type="button"
             onClick={() => update({ icp: item.slug })}
-            className={`rounded-full border px-3 py-1.5 text-sm ${
+            className={`rounded-full border px-3 py-1.5 text-sm font-medium ${
               icp === item.slug
-                ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                ? "chip-active"
                 : "border-[var(--line)] bg-white/70 text-[var(--muted)]"
             }`}
           >
@@ -60,18 +64,28 @@ export function FiltersBar({
         ))}
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <input
-          defaultValue={q}
-          placeholder="Search business, city, email, license…"
-          className="w-full max-w-md rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              update({ q: (e.target as HTMLInputElement).value });
-            }
-          }}
-        />
+        <div className="flex w-full max-w-xl flex-col gap-2 sm:flex-row sm:items-center">
+          <input
+            defaultValue={q}
+            placeholder="Search business, city, email, license…"
+            className="w-full rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                update({ q: (e.target as HTMLInputElement).value });
+              }
+            }}
+          />
+          <select
+            value={sort}
+            onChange={(e) => update({ sort: e.target.value })}
+            className="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2 text-sm text-[var(--ink)]"
+          >
+            <option value="score">Sort by score</option>
+            <option value="name">Sort by name</option>
+          </select>
+        </div>
         <p className="text-sm text-[var(--muted)]">
-          {pending ? "Filtering…" : `Showing ${totalShown} customers`}
+          {pending ? "Filtering…" : `Showing ${totalShown} ranked prospects`}
         </p>
       </div>
     </div>

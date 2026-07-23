@@ -6,6 +6,7 @@ import {
   sendEmailAction,
   sendSmsAction,
 } from "@/actions/outreach";
+import { scoreTone, type ProspectScore } from "@/lib/scoring";
 import { FUNNEL_STAGES, type Customer } from "@/lib/types";
 
 function phoneHref(phone: string | null | undefined) {
@@ -14,7 +15,15 @@ function phoneHref(phone: string | null | undefined) {
   return digits ? `tel:${digits}` : null;
 }
 
-export function CustomerRow({ customer }: { customer: Customer }) {
+export function CustomerRow({
+  customer,
+  score,
+  rank,
+}: {
+  customer: Customer;
+  score: ProspectScore;
+  rank?: number;
+}) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -22,6 +31,7 @@ export function CustomerRow({ customer }: { customer: Customer }) {
   const callTo = customer.phone_mobile || customer.phone_cslb;
   const smsTo = customer.phone_mobile || customer.phone_cslb;
   const tel = phoneHref(callTo);
+  const tone = scoreTone(score.grade);
 
   function run(
     action: (fd: FormData) => Promise<{ ok: boolean; error?: string; provider?: string }>,
@@ -51,20 +61,34 @@ export function CustomerRow({ customer }: { customer: Customer }) {
       >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            {rank != null && (
+              <span className="text-xs font-medium text-[var(--muted)]">#{rank}</span>
+            )}
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+              style={{ background: tone.bg, color: tone.fg }}
+              title={score.reasons.join(" · ")}
+            >
+              {score.total}
+              <span className="opacity-80">· {score.grade}</span>
+            </span>
             <h3
               className="truncate text-lg text-[var(--ink)]"
               style={{ fontFamily: "var(--font-newsreader), Georgia, serif" }}
             >
               {customer.business_name}
             </h3>
+            <span className="rounded-full border border-[var(--line)] bg-white/80 px-2 py-0.5 text-[11px] text-[var(--muted)]">
+              {score.label}
+            </span>
             {customer.enrichment_source === "apollo" && (
               <span className="rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-[var(--accent)]">
                 Apollo
               </span>
             )}
-            {customer.business_type && (
+            {customer.employee_count != null && (
               <span className="rounded-full border border-[var(--line)] bg-white/80 px-2 py-0.5 text-[11px] text-[var(--muted)]">
-                {customer.business_type}
+                {customer.employee_count} employees
               </span>
             )}
             {customer.funnel_stage && (
@@ -105,6 +129,44 @@ export function CustomerRow({ customer }: { customer: Customer }) {
               {message}
             </p>
           )}
+
+          <div className="mb-4 rounded-xl border border-[var(--line)] bg-white/80 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold">
+                Prospect score · {score.total}/100 ({score.grade} · {score.label})
+              </h4>
+              <p className="text-xs text-[var(--muted)]">
+                {score.reasons.join(" · ") || "Limited signals"}
+              </p>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-5">
+              {(
+                [
+                  ["Contact", score.breakdown.contactability, 30],
+                  ["Complete", score.breakdown.completeness, 20],
+                  ["License", score.breakdown.licenseQuality, 15],
+                  ["ICP fit", score.breakdown.icpFit, 20],
+                  ["Funnel", score.breakdown.funnelMomentum, 15],
+                ] as const
+              ).map(([label, value, max]) => (
+                <div key={label}>
+                  <div className="mb-1 flex justify-between text-[11px] text-[var(--muted)]">
+                    <span>{label}</span>
+                    <span>
+                      {value}/{max}
+                    </span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-black/5">
+                    <div
+                      className="h-full rounded-full bg-[var(--accent)]"
+                      style={{ width: `${(value / max) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="grid gap-4 lg:grid-cols-3">
             <form
               className="space-y-2 rounded-xl border border-[var(--line)] bg-white/80 p-3"
