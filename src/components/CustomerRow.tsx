@@ -6,7 +6,7 @@ import {
   sendEmailAction,
   sendSmsAction,
 } from "@/actions/outreach";
-import type { Customer } from "@/lib/types";
+import { FUNNEL_STAGES, type Customer } from "@/lib/types";
 
 function phoneHref(phone: string | null | undefined) {
   if (!phone) return null;
@@ -60,6 +60,17 @@ export function CustomerRow({ customer }: { customer: Customer }) {
             {customer.enrichment_source === "apollo" && (
               <span className="rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-[var(--accent)]">
                 Apollo
+              </span>
+            )}
+            {customer.business_type && (
+              <span className="rounded-full border border-[var(--line)] bg-white/80 px-2 py-0.5 text-[11px] text-[var(--muted)]">
+                {customer.business_type}
+              </span>
+            )}
+            {customer.funnel_stage && (
+              <span className="rounded-full bg-[var(--accent-2)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--accent-2)]">
+                {FUNNEL_STAGES.find((s) => s.id === customer.funnel_stage)?.short ||
+                  customer.funnel_stage}
               </span>
             )}
           </div>

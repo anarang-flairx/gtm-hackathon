@@ -1,11 +1,20 @@
 import { randomUUID } from "crypto";
+import { promises as fs } from "fs";
+import path from "path";
 import { appendOutreachEvent, getLocalDb } from "../src/lib/local-db";
 
 async function main() {
+  // Reset outreach file so old customer IDs don't linger
+  const eventsPath = path.join(process.cwd(), "data", "outreach-events.json");
+  await fs.writeFile(
+    eventsPath,
+    JSON.stringify({ outreach_events: [], email_tracking: [] }, null, 2),
+  );
+
   const db = await getLocalDb();
   const sample = db.customers
     .filter((c) => c.email && (c.phone_mobile || c.phone_cslb))
-    .slice(0, 18);
+    .slice(0, 24);
 
   for (const [i, c] of sample.entries()) {
     const day = new Date();
@@ -14,7 +23,7 @@ async function main() {
 
     if (i % 3 === 0) {
       const token = randomUUID().replace(/-/g, "");
-      await appendOutreachEvent(
+      const { tracking } = await appendOutreachEvent(
         {
           customer_id: c.id,
           channel: "email",
@@ -29,6 +38,27 @@ async function main() {
         },
         { token },
       );
+      // Simulate some opens/clicks for funnel metrics
+      if (tracking && i % 2 === 0) {
+        const raw = JSON.parse(await fs.readFile(eventsPath, "utf8")) as {
+          outreach_events: unknown[];
+          email_tracking: Array<{
+            token: string;
+            opened_at: string | null;
+            clicked_at: string | null;
+            click_count: number;
+          }>;
+        };
+        const row = raw.email_tracking.find((t) => t.token === token);
+        if (row) {
+          row.opened_at = created;
+          if (i % 4 === 0) {
+            row.clicked_at = created;
+            row.click_count = 1 + (i % 3);
+          }
+        }
+        await fs.writeFile(eventsPath, JSON.stringify(raw, null, 2));
+      }
     } else if (i % 3 === 1) {
       await appendOutreachEvent({
         customer_id: c.id,
@@ -58,7 +88,7 @@ async function main() {
     }
   }
 
-  console.log(`Seeded outreach events for ${sample.length} customers`);
+  console.log(`Seeded outreach events for ${sample.length} micro contractors`);
 }
 
 main().catch((err) => {

@@ -26,7 +26,7 @@ export default async function CustomersPage({
           Customers by ICP
         </h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Expand any account to run email, phone, and text outreach tools.
+          Expand any micro sole-owner account to run email, phone, and text outreach tools.
         </p>
       </section>
 

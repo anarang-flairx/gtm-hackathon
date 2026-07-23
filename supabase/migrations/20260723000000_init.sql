@@ -30,6 +30,7 @@ create table if not exists public.customers (
   company_domain text,
   enriched_at timestamptz,
   enrichment_source text default 'apollo',
+  funnel_stage text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

@@ -1,6 +1,13 @@
 import { getLocalDb } from "@/lib/local-db";
 import { createServiceSupabaseClient, isSupabaseConfigured } from "@/lib/supabase";
-import type { Customer, Icp, OutreachEvent, EmailTracking } from "@/lib/types";
+import {
+  FUNNEL_STAGES,
+  type Customer,
+  type FunnelStageId,
+  type Icp,
+  type OutreachEvent,
+  type EmailTracking,
+} from "@/lib/types";
 
 export async function listIcps(): Promise<Icp[]> {
   if (isSupabaseConfigured()) {
@@ -22,13 +29,6 @@ export async function listCustomers(opts?: {
   const limit = opts?.limit ?? 200;
   const q = (opts?.q || "").trim().toLowerCase();
 
-  if (isSupabaseConfigured()) {
-    const sb = createServiceSupabaseClient();
-    if (sb) {
-      // Fallback to local if supabase empty — hackathon local-first
-    }
-  }
-
   const db = await getLocalDb();
   let rows = db.customers;
   if (opts?.icpSlug) {
@@ -43,6 +43,7 @@ export async function listCustomers(opts?: {
         c.email,
         c.license_number,
         c.classification,
+        c.business_type,
       ]
         .filter(Boolean)
         .join(" ")
@@ -70,10 +71,35 @@ export async function listOutreachEvents(opts?: {
   return rows.slice(0, opts?.limit ?? 500);
 }
 
+function emptyFunnelCounts(): Record<FunnelStageId, number> {
+  return Object.fromEntries(
+    FUNNEL_STAGES.map((s) => [s.id, 0]),
+  ) as Record<FunnelStageId, number>;
+}
+
+function stageIndex(id: FunnelStageId | null) {
+  if (!id) return -1;
+  return FUNNEL_STAGES.findIndex((s) => s.id === id);
+}
+
+/** Count customers who have reached at least this stage */
+function cumulativeFunnel(customers: Customer[]) {
+  const reached = emptyFunnelCounts();
+  for (const c of customers) {
+    const idx = stageIndex(c.funnel_stage);
+    if (idx < 0) continue;
+    for (let i = 0; i <= idx; i++) {
+      reached[FUNNEL_STAGES[i].id] += 1;
+    }
+  }
+  return reached;
+}
+
 export async function getStats() {
   const db = await getLocalDb();
   const events = db.outreach_events;
   const tracking = db.email_tracking;
+  const customers = db.customers;
 
   const byChannel = {
     email: events.filter((e) => e.channel === "email").length,
@@ -84,6 +110,12 @@ export async function getStats() {
   const opens = tracking.filter((t) => t.opened_at).length;
   const clicks = tracking.reduce((sum, t) => sum + t.click_count, 0);
 
+  const messengers = new Set(
+    events
+      .filter((e) => e.channel === "email" || e.channel === "sms")
+      .map((e) => e.customer_id),
+  );
+
   const last7 = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -93,19 +125,48 @@ export async function getStats() {
     return { date: key, count };
   });
 
-  const byIcp: Record<string, { email: number; phone: number; sms: number }> =
-    {};
+  const customerMap = new Map(customers.map((c) => [c.id, c]));
+
+  type IcpMetrics = {
+    customers: number;
+    email: number;
+    phone: number;
+    sms: number;
+    messengers: number;
+    messagesSent: number;
+    funnel: Record<FunnelStageId, number>;
+    funnelExact: Record<FunnelStageId, number>;
+  };
+
+  const byIcp: Record<string, IcpMetrics> = {};
   for (const icp of db.icps) {
-    byIcp[icp.slug] = { email: 0, phone: 0, sms: 0 };
-  }
-  const customerMap = new Map(db.customers.map((c) => [c.id, c]));
-  for (const e of events) {
-    const c = customerMap.get(e.customer_id);
-    if (!c) continue;
-    for (const slug of c.icp_slugs) {
-      if (!byIcp[slug]) byIcp[slug] = { email: 0, phone: 0, sms: 0 };
-      byIcp[slug][e.channel] += 1;
+    const icpCustomers = customers.filter((c) => c.icp_slugs.includes(icp.slug));
+    const icpCustomerIds = new Set(icpCustomers.map((c) => c.id));
+    const icpEvents = events.filter((e) => icpCustomerIds.has(e.customer_id));
+    const msgEvents = icpEvents.filter(
+      (e) => e.channel === "email" || e.channel === "sms",
+    );
+    const exact = emptyFunnelCounts();
+    for (const c of icpCustomers) {
+      if (c.funnel_stage) exact[c.funnel_stage] += 1;
     }
+
+    byIcp[icp.slug] = {
+      customers: icpCustomers.length,
+      email: icpEvents.filter((e) => e.channel === "email").length,
+      phone: icpEvents.filter((e) => e.channel === "phone").length,
+      sms: icpEvents.filter((e) => e.channel === "sms").length,
+      messengers: new Set(msgEvents.map((e) => e.customer_id)).size,
+      messagesSent: msgEvents.length,
+      funnel: cumulativeFunnel(icpCustomers),
+      funnelExact: exact,
+    };
+  }
+
+  const overallFunnel = cumulativeFunnel(customers);
+  const overallExact = emptyFunnelCounts();
+  for (const c of customers) {
+    if (c.funnel_stage) overallExact[c.funnel_stage] += 1;
   }
 
   const statusBreakdown: Record<string, number> = {};
@@ -115,18 +176,25 @@ export async function getStats() {
 
   return {
     totals: {
-      customers: db.customers.length,
+      customers: customers.length,
       emails: byChannel.email,
       calls: byChannel.phone,
       texts: byChannel.sms,
       opens,
       clicks,
+      messengers: messengers.size,
+      messagesSent:
+        events.filter((e) => e.channel === "email" || e.channel === "sms")
+          .length,
     },
     byChannel,
     byIcp,
+    funnel: overallFunnel,
+    funnelExact: overallExact,
     last7,
     statusBreakdown,
     recent: events.slice(0, 20),
     trackingSample: tracking.slice(0, 20) as EmailTracking[],
+    customerMapSize: customerMap.size,
   };
 }
