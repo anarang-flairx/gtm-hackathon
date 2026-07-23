@@ -4,6 +4,7 @@ import path from "path";
 import type {
   Customer,
   EmailTracking,
+  FunnelStageId,
   Icp,
   LocalDb,
   OutreachEvent,
@@ -12,6 +13,7 @@ import type {
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "local-db.json");
 const EVENTS_PATH = path.join(DATA_DIR, "outreach-events.json");
+const PIPELINE_PATH = path.join(DATA_DIR, "pipeline-overrides.json");
 
 async function ensureDataDir() {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -51,12 +53,39 @@ async function writeEventsFile(data: {
 export async function getLocalDb(): Promise<LocalDb> {
   const seed = await readSeedCustomers();
   const events = await readEventsFile();
+  const overrides = await readPipelineOverrides();
+  const customers = seed.customers.map((c) =>
+    Object.prototype.hasOwnProperty.call(overrides, c.id)
+      ? { ...c, funnel_stage: overrides[c.id] }
+      : c,
+  );
   return {
     icps: seed.icps,
-    customers: seed.customers,
+    customers,
     outreach_events: events.outreach_events,
     email_tracking: events.email_tracking,
   };
+}
+
+async function readPipelineOverrides(): Promise<
+  Record<string, FunnelStageId | null>
+> {
+  try {
+    const raw = await fs.readFile(PIPELINE_PATH, "utf8");
+    return JSON.parse(raw) as Record<string, FunnelStageId | null>;
+  } catch {
+    return {};
+  }
+}
+
+export async function setPipelineStage(
+  customerId: string,
+  stage: FunnelStageId | null,
+) {
+  const overrides = await readPipelineOverrides();
+  overrides[customerId] = stage;
+  await ensureDataDir();
+  await fs.writeFile(PIPELINE_PATH, JSON.stringify(overrides, null, 2));
 }
 
 export async function appendOutreachEvent(

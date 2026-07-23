@@ -30,13 +30,21 @@ export async function listCustomers(opts?: {
   q?: string | null;
   limit?: number;
   sort?: "score" | "name";
+  /** open = not closed; closed = project_closed; all = everything */
+  pipeline?: "open" | "closed" | "all";
 }): Promise<RankedCustomer[]> {
   const limit = opts?.limit ?? 200;
   const q = (opts?.q || "").trim().toLowerCase();
   const sort = opts?.sort ?? "score";
+  const pipeline = opts?.pipeline ?? "open";
 
   const db = await getLocalDb();
   let rows = db.customers;
+  if (pipeline === "closed") {
+    rows = rows.filter((c) => c.funnel_stage === "project_closed");
+  } else if (pipeline === "open") {
+    rows = rows.filter((c) => c.funnel_stage !== "project_closed");
+  }
   if (opts?.icpSlug) {
     rows = rows.filter((c) => c.icp_slugs.includes(opts.icpSlug!));
   }

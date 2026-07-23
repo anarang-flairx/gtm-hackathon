@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/", label: "Customers" },
+  { href: "/", label: "Prospects" },
+  { href: "/customers", label: "Customers" },
   { href: "/tools", label: "Tools by ICP" },
   { href: "/stats", label: "Tools" },
   { href: "/map", label: "Disaster map" },
@@ -27,7 +28,7 @@ export function AppNav() {
             Prospect Desk
           </h1>
           <p className="mt-1 max-w-xl text-sm text-[var(--muted)]">
-            Micro sole-owner contractors enriched via Apollo · outbound + disaster focus
+            Apollo-enriched prospects · custom pipelines · bulk outbound + disaster focus
           </p>
         </div>
         <nav className="flex gap-1 rounded-xl border border-[var(--line)] bg-white/70 p-1 shadow-[var(--shadow)]">

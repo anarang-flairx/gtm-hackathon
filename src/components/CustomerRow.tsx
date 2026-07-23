@@ -5,9 +5,10 @@ import {
   logCallAction,
   sendEmailAction,
   sendSmsAction,
+  updatePipelineAction,
 } from "@/actions/outreach";
 import { scoreTone, type ProspectScore } from "@/lib/scoring";
-import { FUNNEL_STAGES, type Customer } from "@/lib/types";
+import { FUNNEL_STAGES, type Customer, type FunnelStageId } from "@/lib/types";
 
 function phoneHref(phone: string | null | undefined) {
   if (!phone) return null;
@@ -19,13 +20,20 @@ export function CustomerRow({
   customer,
   score,
   rank,
+  selected,
+  onToggleSelect,
 }: {
   customer: Customer;
   score: ProspectScore;
   rank?: number;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [pipeline, setPipeline] = useState<FunnelStageId | "">(
+    customer.funnel_stage || "",
+  );
   const [pending, startTransition] = useTransition();
 
   const callTo = customer.phone_mobile || customer.phone_cslb;
@@ -52,13 +60,44 @@ export function CustomerRow({
     });
   }
 
+  function savePipeline(next: string) {
+    setPipeline((next || "") as FunnelStageId | "");
+    const fd = new FormData();
+    fd.set("customerId", customer.id);
+    fd.set("stage", next);
+    startTransition(async () => {
+      const res = await updatePipelineAction(fd);
+      if (!res.ok) {
+        setMessage(res.error || "Pipeline update failed");
+        return;
+      }
+      setMessage(
+        next
+          ? `Pipeline set to ${FUNNEL_STAGES.find((s) => s.id === next)?.label || next}`
+          : "Pipeline cleared",
+      );
+    });
+  }
+
   return (
     <article className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--panel)] shadow-[var(--shadow)]">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-start justify-between gap-4 px-4 py-4 text-left hover:bg-black/[0.02] sm:px-5"
-      >
+      <div className="flex items-start gap-3 px-4 py-4 sm:px-5">
+        {onToggleSelect && (
+          <label className="mt-1.5 flex shrink-0 cursor-pointer items-center">
+            <input
+              type="checkbox"
+              checked={!!selected}
+              onChange={() => onToggleSelect(customer.id)}
+              className="h-4 w-4 accent-[var(--accent)]"
+              aria-label={`Select ${customer.business_name}`}
+            />
+          </label>
+        )}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex min-w-0 flex-1 items-start justify-between gap-4 text-left hover:opacity-95"
+        >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {rank != null && (
@@ -120,7 +159,8 @@ export function CustomerRow({
           <p className="mt-1">{callTo || "No phone"}</p>
           <p className="mt-2 text-[var(--accent)]">{open ? "Hide tools" : "Open tools"}</p>
         </div>
-      </button>
+        </button>
+      </div>
 
       {open && (
         <div className="border-t border-[var(--line)] bg-white/50 px-4 py-4 sm:px-5">
@@ -129,6 +169,30 @@ export function CustomerRow({
               {message}
             </p>
           )}
+
+          <div className="mb-4 rounded-xl border border-[var(--line)] bg-white/80 p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h4 className="text-sm font-semibold">Custom pipeline</h4>
+              <select
+                value={pipeline}
+                disabled={pending}
+                onChange={(e) => savePipeline(e.target.value)}
+                className="rounded-lg border border-[var(--line)] bg-white px-2.5 py-2 text-sm"
+              >
+                <option value="">Not started</option>
+                {FUNNEL_STAGES.map((stage) => (
+                  <option key={stage.id} value={stage.id}>
+                    {stage.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="mt-2 text-xs text-[var(--muted)]">
+              Move this prospect through your market funnel. Setting{" "}
+              <strong>Project closed</strong> removes them from Prospects and
+              moves them to the Customers tab.
+            </p>
+          </div>
 
           <div className="mb-4 rounded-xl border border-[var(--line)] bg-white/80 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">

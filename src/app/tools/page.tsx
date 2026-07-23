@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CustomerRow } from "@/components/CustomerRow";
+import { ProspectList } from "@/components/ProspectList";
 import { listCustomers, listIcps } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,11 @@ export default async function ToolsByIcpPage({
   const icps = await listIcps();
   const active = sp.icp || icps[0]?.slug || "employees-0-5";
   const channel = sp.channel || "all";
-  const customers = await listCustomers({ icpSlug: active, limit: 80 });
+  const customers = await listCustomers({
+    icpSlug: active,
+    limit: 80,
+    pipeline: "open",
+  });
 
   const filtered =
     channel === "email"
@@ -34,8 +38,8 @@ export default async function ToolsByIcpPage({
           Tools by ICP
         </h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Filter the outbound stack by segment, then apply email, phone, or text
-          tools across the list.
+          Filter open prospects by employee-band ICP, then bulk or individual
+          email, call, and text.
         </p>
       </section>
 
@@ -79,20 +83,11 @@ export default async function ToolsByIcpPage({
       <div className="mb-4 rounded-2xl border border-[var(--line)] bg-white/70 px-4 py-3 text-sm text-[var(--muted)]">
         <strong className="text-[var(--ink)]">{activeIcp?.name}</strong>
         {" · "}
-        {filtered.length} accounts ranked by score · ready for{" "}
+        {filtered.length} open prospects ranked by score · ready for{" "}
         {channel === "all" ? "any channel" : channel}
       </div>
 
-      <div className="space-y-3">
-        {filtered.map((customer, idx) => (
-          <CustomerRow
-            key={customer.id}
-            customer={customer}
-            score={customer.score}
-            rank={idx + 1}
-          />
-        ))}
-      </div>
+      <ProspectList prospects={filtered} sortByScore />
     </div>
   );
 }

@@ -5,21 +5,21 @@ import { listCustomers, listIcps } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProspectsPage({
+export default async function CustomersPage({
   searchParams,
 }: {
   searchParams: Promise<{ icp?: string; q?: string; sort?: string }>;
 }) {
   const sp = await searchParams;
   const sort = sp.sort === "name" ? "name" : "score";
-  const [icps, prospects] = await Promise.all([
+  const [icps, customers] = await Promise.all([
     listIcps(),
     listCustomers({
       icpSlug: sp.icp,
       q: sp.q,
-      limit: 120,
+      limit: 200,
       sort,
-      pipeline: "open",
+      pipeline: "closed",
     }),
   ]);
 
@@ -30,20 +30,19 @@ export default async function ProspectsPage({
           className="text-2xl text-[var(--ink)]"
           style={{ fontFamily: "var(--font-newsreader), Georgia, serif" }}
         >
-          Prospects
+          Customers
         </h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Ranked open-pipeline prospects only. Closed deals move to Customers.
-          Set each custom pipeline stage, then select rows for bulk email / call /
-          SMS.
+          Closed deals only — prospects leave the Prospects tab when their
+          pipeline is set to Project closed.
         </p>
       </section>
 
       <Suspense fallback={<p className="text-sm text-[var(--muted)]">Loading filters…</p>}>
-        <FiltersBar icps={icps} totalShown={prospects.length} />
+        <FiltersBar icps={icps} totalShown={customers.length} basePath="/customers" />
       </Suspense>
 
-      <ProspectList prospects={prospects} sortByScore={sort === "score"} />
+      <ProspectList prospects={customers} sortByScore={sort === "score"} />
     </div>
   );
 }

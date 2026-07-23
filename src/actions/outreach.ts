@@ -2,8 +2,17 @@
 
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
-import { appendOutreachEvent } from "@/lib/local-db";
+import { appendOutreachEvent, setPipelineStage } from "@/lib/local-db";
 import { getCustomer } from "@/lib/data";
+import { FUNNEL_STAGES, type FunnelStageId } from "@/lib/types";
+
+function revalidateProspectPaths() {
+  revalidatePath("/");
+  revalidatePath("/customers");
+  revalidatePath("/closed");
+  revalidatePath("/tools");
+  revalidatePath("/stats");
+}
 
 async function sendViaResend(opts: {
   to: string;
@@ -103,9 +112,7 @@ export async function sendEmailAction(formData: FormData) {
     { token },
   );
 
-  revalidatePath("/");
-  revalidatePath("/tools");
-  revalidatePath("/stats");
+  revalidateProspectPaths();
   return { ok: true, provider };
 }
 
@@ -129,9 +136,7 @@ export async function logCallAction(formData: FormData) {
     metadata: { outcome },
   });
 
-  revalidatePath("/");
-  revalidatePath("/tools");
-  revalidatePath("/stats");
+  revalidateProspectPaths();
   return { ok: true, provider: "tel" as const };
 }
 
@@ -169,8 +174,114 @@ export async function sendSmsAction(formData: FormData) {
     metadata: { providerId },
   });
 
-  revalidatePath("/");
-  revalidatePath("/tools");
-  revalidatePath("/stats");
+  revalidateProspectPaths();
   return { ok: true, provider };
+}
+
+export async function updatePipelineAction(formData: FormData) {
+  const customerId = String(formData.get("customerId") || "");
+  const stageRaw = String(formData.get("stage") || "").trim();
+  if (!customerId) return { ok: false, error: "Missing prospect" };
+
+  const valid = FUNNEL_STAGES.some((s) => s.id === stageRaw);
+  const stage = (stageRaw === "" ? null : stageRaw) as FunnelStageId | null;
+  if (stageRaw && !valid) return { ok: false, error: "Invalid pipeline stage" };
+
+  const customer = await getCustomer(customerId);
+  if (!customer) return { ok: false, error: "Prospect not found" };
+
+  await setPipelineStage(customerId, stage);
+  revalidateProspectPaths();
+  return { ok: true as const, stage };
+}
+
+export async function bulkOutreachAction(formData: FormData) {
+  const channel = String(formData.get("channel") || "") as
+    | "email"
+    | "phone"
+    | "sms";
+  const idsRaw = String(formData.get("customerIds") || "");
+  const ids = idsRaw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const subject = String(formData.get("subject") || "").trim();
+  const body = String(formData.get("body") || "").trim();
+  const outcome = String(formData.get("outcome") || "connected").trim();
+
+  if (!ids.length) return { ok: false, error: "Select at least one prospect" };
+  if (!["email", "phone", "sms"].includes(channel)) {
+    return { ok: false, error: "Invalid channel" };
+  }
+  if (channel === "email" && (!subject || !body)) {
+    return { ok: false, error: "Subject and body required for bulk email" };
+  }
+  if (channel === "sms" && !body) {
+    return { ok: false, error: "Message body required for bulk SMS" };
+  }
+
+  let sent = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const id of ids) {
+    const customer = await getCustomer(id);
+    if (!customer) {
+      skipped += 1;
+      continue;
+    }
+
+    if (channel === "email") {
+      const to = customer.email;
+      if (!to) {
+        skipped += 1;
+        continue;
+      }
+      const fd = new FormData();
+      fd.set("customerId", id);
+      fd.set("to", to);
+      fd.set("subject", subject);
+      fd.set("body", body);
+      const res = await sendEmailAction(fd);
+      if (res.ok) sent += 1;
+      else {
+        skipped += 1;
+        if (res.error) errors.push(`${customer.business_name}: ${res.error}`);
+      }
+    } else if (channel === "sms") {
+      const to = customer.phone_mobile || customer.phone_cslb;
+      if (!to) {
+        skipped += 1;
+        continue;
+      }
+      const fd = new FormData();
+      fd.set("customerId", id);
+      fd.set("to", to);
+      fd.set("body", body);
+      const res = await sendSmsAction(fd);
+      if (res.ok) sent += 1;
+      else {
+        skipped += 1;
+        if (res.error) errors.push(`${customer.business_name}: ${res.error}`);
+      }
+    } else {
+      const to = customer.phone_mobile || customer.phone_cslb;
+      const fd = new FormData();
+      fd.set("customerId", id);
+      fd.set("to", to || "");
+      fd.set("outcome", outcome);
+      fd.set("notes", body || "Bulk call logged");
+      const res = await logCallAction(fd);
+      if (res.ok) sent += 1;
+      else skipped += 1;
+    }
+  }
+
+  revalidateProspectPaths();
+  return {
+    ok: true as const,
+    sent,
+    skipped,
+    error: errors[0],
+  };
 }

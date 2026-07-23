@@ -7,9 +7,11 @@ import type { Icp } from "@/lib/types";
 export function FiltersBar({
   icps,
   totalShown,
+  basePath = "/",
 }: {
   icps: Icp[];
   totalShown: number;
+  basePath?: string;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -30,7 +32,7 @@ export function FiltersBar({
     if (nextSort && nextSort !== "score") sp.set("sort", nextSort);
     else sp.delete("sort");
     startTransition(() => {
-      router.push(`/?${sp.toString()}`);
+      router.push(`${basePath}?${sp.toString()}`);
     });
   }
 
