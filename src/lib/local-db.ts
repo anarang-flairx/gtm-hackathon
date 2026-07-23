@@ -159,6 +159,17 @@ export function mockApolloEnrichment(input: {
         ? null
         : `(${200 + (n % 700)}) ${100 + (n % 800)}-${1000 + (n % 9000)}`;
 
+  // Deterministic Apollo-style headcount across ICP bands
+  const band = n % 100;
+  let employee_count: number;
+  if (band < 45) {
+    employee_count = 1 + (n % 5); // 1–5
+  } else if (band < 80) {
+    employee_count = 6 + (n % 10); // 6–15
+  } else {
+    employee_count = 16 + (n % 85); // 16–100
+  }
+
   return {
     email,
     email_status: emailStatus,
@@ -166,9 +177,16 @@ export function mockApolloEnrichment(input: {
     linkedin_url: `https://www.linkedin.com/company/${slug || "contractor"}`,
     title: titles[n % titles.length],
     company_domain: domain,
+    employee_count,
     enriched_at: new Date().toISOString(),
     enrichment_source: "apollo" as const,
   };
+}
+
+export function icpSlugForEmployeeCount(count: number): string {
+  if (count <= 5) return "employees-0-5";
+  if (count <= 15) return "employees-5-15";
+  return "employees-16-plus";
 }
 
 export async function writeSeedFile(payload: {
