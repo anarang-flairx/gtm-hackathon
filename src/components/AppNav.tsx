@@ -40,9 +40,9 @@ export function AppNav() {
               <Link
                 key={tab.href}
                 href={tab.href}
-                className={`rounded-lg px-3 py-2 text-sm transition ${
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
                   active
-                    ? "bg-[var(--accent)] text-white"
+                    ? "chip-active"
                     : "text-[var(--muted)] hover:bg-black/5 hover:text-[var(--ink)]"
                 }`}
               >

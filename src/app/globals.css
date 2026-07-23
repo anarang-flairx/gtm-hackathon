@@ -50,6 +50,13 @@ a {
   text-decoration: none;
 }
 
+/* Active filter/nav chips — must beat `a { color: inherit }` */
+.chip-active {
+  background-color: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #ffffff !important;
+}
+
 button,
 input,
 select,

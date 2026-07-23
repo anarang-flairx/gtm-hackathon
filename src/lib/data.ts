@@ -1,5 +1,6 @@
 import { getLocalDb } from "@/lib/local-db";
 import { createServiceSupabaseClient, isSupabaseConfigured } from "@/lib/supabase";
+import { rankCustomers, scoreProspect } from "@/lib/scoring";
 import {
   FUNNEL_STAGES,
   type Customer,
@@ -8,6 +9,9 @@ import {
   type OutreachEvent,
   type EmailTracking,
 } from "@/lib/types";
+import type { ProspectScore } from "@/lib/scoring";
+
+export type RankedCustomer = Customer & { score: ProspectScore };
 
 export async function listIcps(): Promise<Icp[]> {
   if (isSupabaseConfigured()) {
@@ -25,9 +29,11 @@ export async function listCustomers(opts?: {
   icpSlug?: string | null;
   q?: string | null;
   limit?: number;
-}): Promise<Customer[]> {
+  sort?: "score" | "name";
+}): Promise<RankedCustomer[]> {
   const limit = opts?.limit ?? 200;
   const q = (opts?.q || "").trim().toLowerCase();
+  const sort = opts?.sort ?? "score";
 
   const db = await getLocalDb();
   let rows = db.customers;
@@ -44,6 +50,7 @@ export async function listCustomers(opts?: {
         c.license_number,
         c.classification,
         c.business_type,
+        c.employee_count != null ? String(c.employee_count) : "",
       ]
         .filter(Boolean)
         .join(" ")
@@ -51,7 +58,15 @@ export async function listCustomers(opts?: {
       return hay.includes(q);
     });
   }
-  return rows.slice(0, limit);
+
+  if (sort === "name") {
+    return rows
+      .map((c) => ({ ...c, score: scoreProspect(c) }))
+      .sort((a, b) => a.business_name.localeCompare(b.business_name))
+      .slice(0, limit);
+  }
+
+  return rankCustomers(rows).slice(0, limit);
 }
 
 export async function getCustomer(id: string): Promise<Customer | null> {

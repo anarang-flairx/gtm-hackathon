@@ -1,7 +1,11 @@
 import { createHash } from "crypto";
 import path from "path";
 import * as XLSX from "xlsx";
-import { mockApolloEnrichment, writeSeedFile } from "../src/lib/local-db";
+import {
+  icpSlugForEmployeeCount,
+  mockApolloEnrichment,
+  writeSeedFile,
+} from "../src/lib/local-db";
 import type { Customer, FunnelStageId, Icp } from "../src/lib/types";
 import { FUNNEL_STAGES } from "../src/lib/types";
 
@@ -9,48 +13,27 @@ const XLSX_PATH =
   process.env.CSLB_XLSX_PATH ||
   path.join(process.env.HOME || "", "Desktop", "CSLB Contractor List.xlsx");
 
-/** Very small contractors only — Sole Owner ICPs */
+/** ICPs = Apollo employee-count bands */
 const ICPS: Icp[] = [
   {
-    id: "11111111-1111-1111-1111-111111111201",
-    slug: "micro-remodel",
-    name: "Micro Sole Owner Remodelers",
-    description: "Sole Owner B-2 residential remodelers — very small shops",
+    id: "11111111-1111-1111-1111-111111111301",
+    slug: "employees-0-5",
+    name: "0–5 employees",
+    description: "Micro shops — 0 to 5 employees (Apollo headcount)",
   },
   {
-    id: "11111111-1111-1111-1111-111111111202",
-    slug: "micro-cabinet",
-    name: "Micro Sole Owner Millwork",
-    description: "Sole Owner C-6 cabinet / millwork — very small shops",
+    id: "11111111-1111-1111-1111-111111111302",
+    slug: "employees-5-15",
+    name: "5–15 employees",
+    description: "Small crews — more than 5 and up to 15 employees",
   },
   {
-    id: "11111111-1111-1111-1111-111111111203",
-    slug: "micro-norcal",
-    name: "Micro Sole Owner NorCal",
-    description: "Sole Owner contractors in NorCal counties — very small shops",
+    id: "11111111-1111-1111-1111-111111111303",
+    slug: "employees-16-plus",
+    name: "16+ employees",
+    description: "Growing contractors — 16 or more employees",
   },
 ];
-
-const NORCAL_COUNTIES = new Set(
-  [
-    "Alameda",
-    "Contra Costa",
-    "Marin",
-    "Napa",
-    "San Francisco",
-    "San Mateo",
-    "Santa Clara",
-    "Solano",
-    "Sonoma",
-    "Sacramento",
-    "Yolo",
-    "Santa Cruz",
-    "Monterey",
-    "San Benito",
-    "Mendocino",
-    "Lake",
-  ].map((c) => c.toLowerCase()),
-);
 
 function stableId(key: string) {
   const h = createHash("sha1").update(key).digest("hex");
@@ -63,25 +46,13 @@ function str(v: unknown): string | null {
   return s.length ? s : null;
 }
 
-function isSoleOwner(businessType: string | null) {
-  if (!businessType) return false;
-  const t = businessType.toLowerCase();
-  return t.includes("sole") || t === "individual" || t.includes("sole proprietor");
-}
-
-function hasClass(classification: string | null, code: string) {
-  if (!classification) return false;
-  const normalized = classification.toUpperCase().replace(/\s+/g, "");
-  const target = code.toUpperCase().replace(/\s+/g, "");
-  return normalized.split("|").some((part) => part.includes(target));
-}
-
 type RawRow = Record<string, unknown>;
 
 function rowFields(row: RawRow) {
   return {
     license: str(row.LicenseNumber ?? row.license_number),
-    businessName: str(row.BusinessName ?? row.business_name) || "Unknown Contractor",
+    businessName:
+      str(row.BusinessName ?? row.business_name) || "Unknown Contractor",
     city: str(row.City ?? row.city),
     zip: str(row.Zip ?? row.zip),
     county: str(row.County ?? row.county),
@@ -108,13 +79,17 @@ function sheetToRows(wb: XLSX.WorkBook, name: string): RawRow[] {
 }
 
 function assignFunnelStage(seed: string): FunnelStageId | null {
-  const n = parseInt(createHash("sha1").update(seed).digest("hex").slice(0, 8), 16);
-  // ~35% not yet touched; rest spread across funnel with falloff
+  const n = parseInt(
+    createHash("sha1").update(seed).digest("hex").slice(0, 8),
+    16,
+  );
   if (n % 100 < 35) return null;
-  const weights = [28, 18, 14, 12, 9, 7, 5, 4, 3]; // sum 100 of remaining distribution
-  let roll = n % 100;
-  // remap using hash
-  roll = parseInt(createHash("sha1").update(seed + ":funnel").digest("hex").slice(0, 4), 16) % 100;
+  const weights = [28, 18, 14, 12, 9, 7, 5, 4, 3];
+  const roll =
+    parseInt(
+      createHash("sha1").update(seed + ":funnel").digest("hex").slice(0, 4),
+      16,
+    ) % 100;
   let acc = 0;
   for (let i = 0; i < FUNNEL_STAGES.length; i++) {
     acc += weights[i];
@@ -127,28 +102,23 @@ async function main() {
   console.log(`Reading ${XLSX_PATH}`);
   const wb = XLSX.readFile(XLSX_PATH, {
     cellDates: false,
-    sheets: [
-      "B-2 Residential Remodeling",
-      "C-6 Cabinet and Millwork",
-      "Apollo for NorCal",
-    ],
+    sheets: ["B-2 Residential Remodeling", "C-6 Cabinet and Millwork"],
   });
 
   const byLicense = new Map<string, Customer>();
   const byName = new Map<string, Customer>();
   const customers: Customer[] = [];
 
-  function ensureCustomer(row: RawRow): Customer | null {
+  function upsert(row: RawRow) {
     const f = rowFields(row);
-    if (!isSoleOwner(f.businessType) && f.businessType !== null) {
-      // NorCal lite rows may lack business type — allow if later matched
-    }
-    // Require Sole Owner when business type is present
-    if (f.businessType && !isSoleOwner(f.businessType)) return null;
+    if (!f.businessName) return;
 
     let existing: Customer | undefined;
-    if (f.license && byLicense.has(f.license)) existing = byLicense.get(f.license);
-    else existing = byName.get(nameKey(f.businessName, f.city, f.zip));
+    if (f.license && byLicense.has(f.license)) {
+      existing = byLicense.get(f.license);
+    } else {
+      existing = byName.get(nameKey(f.businessName, f.city, f.zip));
+    }
 
     if (existing) {
       existing.license_number = existing.license_number || f.license;
@@ -160,13 +130,8 @@ async function main() {
       existing.county = existing.county || f.county;
       existing.zip = existing.zip || f.zip;
       existing.state = existing.state || f.state;
-      return existing;
+      return;
     }
-
-    // Skip creating if we know it's not sole owner
-    if (f.businessType && !isSoleOwner(f.businessType)) return null;
-    // Skip creating NorCal-name-only rows without sole-owner confirmation
-    if (!f.businessType) return null;
 
     const id = stableId(
       f.license
@@ -195,62 +160,29 @@ async function main() {
       company_domain: null,
       enriched_at: null,
       enrichment_source: null,
+      employee_count: null,
       icp_slugs: [],
       funnel_stage: null,
     };
 
     customers.push(customer);
-    if (customer.license_number) byLicense.set(customer.license_number, customer);
-    byName.set(nameKey(customer.business_name, customer.city, customer.zip), customer);
-    return customer;
-  }
-
-  function addIcp(c: Customer, slug: string) {
-    if (!c.icp_slugs.includes(slug)) c.icp_slugs.push(slug);
-  }
-
-  // B-2 sole owners → micro-remodel
-  for (const row of sheetToRows(wb, "B-2 Residential Remodeling")) {
-    const f = rowFields(row);
-    if (!isSoleOwner(f.businessType)) continue;
-    if (!hasClass(f.classification, "B-2") && !hasClass(f.classification, "B2")) {
-      // sheet is already B-2 focused; still include
+    if (customer.license_number) {
+      byLicense.set(customer.license_number, customer);
     }
-    const c = ensureCustomer(row);
-    if (c) addIcp(c, "micro-remodel");
+    byName.set(
+      nameKey(customer.business_name, customer.city, customer.zip),
+      customer,
+    );
   }
 
-  // C-6 sole owners → micro-cabinet
+  for (const row of sheetToRows(wb, "B-2 Residential Remodeling")) {
+    upsert(row);
+  }
   for (const row of sheetToRows(wb, "C-6 Cabinet and Millwork")) {
-    const f = rowFields(row);
-    if (!isSoleOwner(f.businessType)) continue;
-    const c = ensureCustomer(row);
-    if (c) addIcp(c, "micro-cabinet");
-  }
-
-  // Build NorCal name set from Apollo sheet, then tag sole owners in those areas
-  const norcalNames = new Set<string>();
-  for (const row of sheetToRows(wb, "Apollo for NorCal")) {
-    const f = rowFields(row);
-    norcalNames.add(nameKey(f.businessName, f.city, f.zip));
-    norcalNames.add(nameKey(f.businessName, f.city, null));
+    upsert(row);
   }
 
   for (const c of customers) {
-    const inApolloList =
-      norcalNames.has(nameKey(c.business_name, c.city, c.zip)) ||
-      norcalNames.has(nameKey(c.business_name, c.city, null));
-    const inNorCalCounty =
-      !!c.county && NORCAL_COUNTIES.has(c.county.toLowerCase());
-    if (inApolloList || inNorCalCounty) {
-      if (isSoleOwner(c.business_type)) addIcp(c, "micro-norcal");
-    }
-  }
-
-  // Keep only customers that landed in at least one ICP
-  const kept = customers.filter((c) => c.icp_slugs.length > 0);
-
-  for (const c of kept) {
     const enriched = mockApolloEnrichment({
       businessName: c.business_name,
       city: c.city,
@@ -258,20 +190,26 @@ async function main() {
       licenseNumber: c.license_number,
     });
     Object.assign(c, enriched);
+    const count = c.employee_count ?? 1;
+    c.icp_slugs = [icpSlugForEmployeeCount(count)];
     c.funnel_stage = assignFunnelStage(c.id);
   }
 
-  await writeSeedFile({ icps: ICPS, customers: kept });
+  await writeSeedFile({ icps: ICPS, customers });
 
   const counts = {
-    total: kept.length,
-    microRemodel: kept.filter((c) => c.icp_slugs.includes("micro-remodel")).length,
-    microCabinet: kept.filter((c) => c.icp_slugs.includes("micro-cabinet")).length,
-    microNorcal: kept.filter((c) => c.icp_slugs.includes("micro-norcal")).length,
-    withEmail: kept.filter((c) => c.email).length,
-    inFunnel: kept.filter((c) => c.funnel_stage).length,
+    total: customers.length,
+    emp0to5: customers.filter((c) => c.icp_slugs.includes("employees-0-5"))
+      .length,
+    emp5to15: customers.filter((c) => c.icp_slugs.includes("employees-5-15"))
+      .length,
+    emp16plus: customers.filter((c) =>
+      c.icp_slugs.includes("employees-16-plus"),
+    ).length,
+    withEmail: customers.filter((c) => c.email).length,
+    inFunnel: customers.filter((c) => c.funnel_stage).length,
   };
-  console.log("Import complete (Sole Owner / micro ICPs only):", counts);
+  console.log("Import complete (employee-band ICPs):", counts);
   console.log("Wrote data/customers.json");
 }
 

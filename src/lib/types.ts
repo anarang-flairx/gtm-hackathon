@@ -88,6 +88,8 @@ export type Customer = {
   company_domain: string | null;
   enriched_at: string | null;
   enrichment_source: string | null;
+  /** Apollo-enriched headcount */
+  employee_count: number | null;
   icp_slugs: string[];
   /** Furthest market-funnel stage reached */
   funnel_stage: FunnelStageId | null;

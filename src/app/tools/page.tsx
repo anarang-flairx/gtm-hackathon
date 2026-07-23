@@ -11,7 +11,7 @@ export default async function ToolsByIcpPage({
 }) {
   const sp = await searchParams;
   const icps = await listIcps();
-  const active = sp.icp || icps[0]?.slug || "b2-residential";
+  const active = sp.icp || icps[0]?.slug || "employees-0-5";
   const channel = sp.channel || "all";
   const customers = await listCustomers({ icpSlug: active, limit: 80 });
 
@@ -44,9 +44,9 @@ export default async function ToolsByIcpPage({
           <Link
             key={icp.id}
             href={`/tools?icp=${icp.slug}&channel=${channel}`}
-            className={`rounded-full border px-3 py-1.5 text-sm ${
+            className={`rounded-full border px-3 py-1.5 text-sm font-medium ${
               active === icp.slug
-                ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                ? "chip-active"
                 : "border-[var(--line)] bg-white/70 text-[var(--muted)]"
             }`}
           >
@@ -65,9 +65,9 @@ export default async function ToolsByIcpPage({
           <Link
             key={ch.id}
             href={`/tools?icp=${active}&channel=${ch.id}`}
-            className={`rounded-lg border px-3 py-1.5 text-sm ${
+            className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
               channel === ch.id
-                ? "border-[var(--ink)] bg-[var(--ink)] text-white"
+                ? "chip-active"
                 : "border-[var(--line)] bg-white/70 text-[var(--muted)]"
             }`}
           >
@@ -79,13 +79,18 @@ export default async function ToolsByIcpPage({
       <div className="mb-4 rounded-2xl border border-[var(--line)] bg-white/70 px-4 py-3 text-sm text-[var(--muted)]">
         <strong className="text-[var(--ink)]">{activeIcp?.name}</strong>
         {" · "}
-        {filtered.length} accounts ready for{" "}
+        {filtered.length} accounts ranked by score · ready for{" "}
         {channel === "all" ? "any channel" : channel}
       </div>
 
       <div className="space-y-3">
-        {filtered.map((customer) => (
-          <CustomerRow key={customer.id} customer={customer} />
+        {filtered.map((customer, idx) => (
+          <CustomerRow
+            key={customer.id}
+            customer={customer}
+            score={customer.score}
+            rank={idx + 1}
+          />
         ))}
       </div>
     </div>

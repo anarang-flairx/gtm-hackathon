@@ -8,12 +8,18 @@ export const dynamic = "force-dynamic";
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ icp?: string; q?: string }>;
+  searchParams: Promise<{ icp?: string; q?: string; sort?: string }>;
 }) {
   const sp = await searchParams;
+  const sort = sp.sort === "name" ? "name" : "score";
   const [icps, customers] = await Promise.all([
     listIcps(),
-    listCustomers({ icpSlug: sp.icp, q: sp.q, limit: 120 }),
+    listCustomers({
+      icpSlug: sp.icp,
+      q: sp.q,
+      limit: 120,
+      sort,
+    }),
   ]);
 
   return (
@@ -26,7 +32,8 @@ export default async function CustomersPage({
           Customers by ICP
         </h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Expand any micro sole-owner account to run email, phone, and text outreach tools.
+          Ranked by prospect score (contactability, data quality, license,
+          employee ICP fit, funnel stage). Expand any account to run outreach.
         </p>
       </section>
 
@@ -35,8 +42,13 @@ export default async function CustomersPage({
       </Suspense>
 
       <div className="space-y-3">
-        {customers.map((customer) => (
-          <CustomerRow key={customer.id} customer={customer} />
+        {customers.map((customer, idx) => (
+          <CustomerRow
+            key={customer.id}
+            customer={customer}
+            score={customer.score}
+            rank={sort === "score" ? idx + 1 : undefined}
+          />
         ))}
         {customers.length === 0 && (
           <p className="rounded-xl border border-dashed border-[var(--line)] bg-white/50 px-4 py-10 text-center text-sm text-[var(--muted)]">
